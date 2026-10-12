@@ -210,7 +210,9 @@ footer { padding:32px 0 52px; text-align:center; color:rgba(140,132,120,.55); fo
   nav { gap:12px; padding:8px 10px 8px 14px; }
   nav a.l { display:none; }
   #bee { width:60px; }
-  #say { width:190px; font-size:.82rem; }
+  /* Larger tap target on touch — invisible padding around bee */
+  #bee::after { content:''; position:absolute; inset:-14px; }
+  #say { width:min(190px, calc(100vw - 80px)); font-size:.82rem; }
   .scene { height:auto; }
   .hero { position:relative; height:auto; min-height:100svh; padding:88px 0 32px; }
   .hero .w { display:flex; flex-direction:column; justify-content:center; align-items:stretch; gap:20px; height:auto; }
@@ -386,111 +388,197 @@ document.getElementById('reviews').hidden=false})();
 (function(){
 if(!window.gsap||matchMedia('(prefers-reduced-motion: reduce)').matches)return;
 gsap.registerPlugin(ScrollTrigger);ScrollTrigger.config({ignoreMobileResize:true});
-var bee=document.getElementById('bee'),bi=document.getElementById('bi'),W=function(){return innerWidth},H=function(){return innerHeight};
-var bw=function(){return bee.offsetWidth};
-gsap.set(bee,{x:-150,y:H()*.3});
 
+var bee=document.getElementById('bee'),bi=document.getElementById('bi');
+var W=function(){return innerWidth},H=function(){return innerHeight};
+var bw=function(){return bee.offsetWidth};
+var isMob=function(){return W()<=860};
+
+/* ── Wing flap + body bob ─────────────────────────────────── */
+gsap.set(bee,{x:-150,y:H()*.3});
 gsap.to('.wg',{scaleY:.25,duration:.07,repeat:-1,yoyo:true,ease:'none'});
 gsap.to(bi,{y:-6,duration:.4,repeat:-1,yoyo:true,ease:'sine.inOut'});
 gsap.to('.mq div',{xPercent:-50,duration:30,repeat:-1,ease:'none'});
 
-/* face the direction of travel and tilt */
-var lx=0,ly=0,face=1,flip=gsap.quickSetter(bee.firstElementChild,'scaleX'),tilt=gsap.quickSetter(bee.firstElementChild,'rotation','deg');
-gsap.ticker.add(function(){var x=gsap.getProperty(bee,'x'),y=gsap.getProperty(bee,'y'),dx=x-lx,dy=y-ly;
- if(Math.abs(dx)>.6){face+=((dx>0?1:-1)-face)*.2;flip(face)}
- tilt(gsap.utils.clamp(-25,25,dy*.5*face));lx=x;ly=y});
+/* ── Face direction + tilt ────────────────────────────────── */
+var lx=0,ly=0,face=1;
+var flip=gsap.quickSetter(bee.firstElementChild,'scaleX');
+var tilt=gsap.quickSetter(bee.firstElementChild,'rotation','deg');
+gsap.ticker.add(function(){
+  var x=gsap.getProperty(bee,'x'),y=gsap.getProperty(bee,'y'),dx=x-lx,dy=y-ly;
+  if(Math.abs(dx)>.6){face+=((dx>0?1:-1)-face)*.2;flip(face)}
+  tilt(gsap.utils.clamp(-25,25,dy*.5*face));lx=x;ly=y;
+});
 
-/* Intro: bee flies in from the left */
-gsap.to(bee,{x:function(){return W()*.45},y:function(){return H()*.22},duration:1.6,ease:'power2.out',delay:.4});
+/* ── Intro fly-in: safe landing on mobile (bottom-right corner) */
+gsap.to(bee,{
+  x:function(){return isMob()?W()-bw()-16:W()*.45},
+  y:function(){return isMob()?H()*.78:H()*.22},
+  duration:1.6,ease:'power2.out',delay:.4
+});
 
-var hero=document.querySelector('.hero'),panel=document.getElementById('panel'),blobs=gsap.utils.toArray('.blob');
-/* water splash layer + dirty hero text */
-var sl=document.createElement('div');sl.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:25;overflow:hidden';document.body.appendChild(sl);
-function drop(x,y){var d=document.createElement('i'),s=5+Math.random()*12;d.className='drop';d.style.width=s+'px';d.style.height=s*1.3+'px';sl.appendChild(d);
- gsap.fromTo(d,{x:x,y:y,scale:0,opacity:1},{x:x+(Math.random()*180-90),y:y-(20+Math.random()*70),scale:1,duration:.35,ease:'power2.out',
-  onComplete:function(){gsap.to(d,{y:'+='+(80+Math.random()*140),opacity:0,duration:.6,ease:'power2.in',onComplete:function(){d.remove()}})}})}
-function splash(el,n){if(!el)return;var r=el.getBoundingClientRect();if(r.bottom<0||r.top>H())return;for(var i=0;i<n;i++)drop(r.left+Math.random()*r.width,r.top+Math.random()*r.height)}
+var panel=document.getElementById('panel');
+
+/* ── Splash drops ─────────────────────────────────────────── */
+var sl=document.createElement('div');
+sl.style.cssText='position:fixed;inset:0;pointer-events:none;z-index:25;overflow:hidden';
+document.body.appendChild(sl);
+function drop(x,y){
+  var d=document.createElement('i'),s=5+Math.random()*12;
+  d.className='drop';d.style.width=s+'px';d.style.height=s*1.3+'px';sl.appendChild(d);
+  gsap.fromTo(d,{x:x,y:y,scale:0,opacity:1},{x:x+(Math.random()*180-90),y:y-(20+Math.random()*70),scale:1,duration:.35,ease:'power2.out',
+    onComplete:function(){gsap.to(d,{y:'+='+(80+Math.random()*140),opacity:0,duration:.6,ease:'power2.in',onComplete:function(){d.remove()}})}});
+}
+function splash(el,n){
+  if(!el)return;var r=el.getBoundingClientRect();
+  if(r.bottom<0||r.top>H())return;
+  for(var i=0;i<n;i++)drop(r.left+Math.random()*r.width,r.top+Math.random()*r.height);
+}
+
+/* ── Carpet sweep ─────────────────────────────────────────── */
 var DIRTY='blur(1.4px) brightness(.78) sepia(.45)',CLEAN='blur(0px) brightness(1) sepia(0)';
 var mm=gsap.matchMedia();
-function clean(isMobile){
- var tl=gsap.timeline({scrollTrigger:{trigger:'#scene',start:'top top',end:'bottom bottom',scrub:.8,invalidateOnRefresh:true}});
- var rows=[.1,.34,.58,.82];
- function rect(){return panel.getBoundingClientRect()}
- /* bee sweeps the panel in four rows */
- rows.forEach(function(r,i){
-  var left=i%2===0;
-  tl.to(bee,{x:function(){var q=rect();return left?q.left+q.width-bw()*.9:q.left-bw()*.1},y:function(){var q=rect();return q.top+q.height*r-20},duration:1,ease:'sine.inOut'});
-  tl.to('.bf',{clipPath:'inset('+[20,46,72,100][i]+'% 0% 0% 0%)',duration:1,ease:'none'},'<');
- });
- tl.to('.lb',{opacity:0,duration:.3},'-=.6');tl.to('.ok',{opacity:1,y:4,duration:.4},'-=.3');
- tl.to(panel,{filter:'brightness(1.12) saturate(1.1)',duration:.4},'<');
- /* On desktop only: blur then unblur hero text with splash */
- if(!isMobile){
-  gsap.set('.pill,.hero h1,.hero .d',{filter:DIRTY});
-  tl.add(function(){splash(document.querySelector('.hero h1'),34);splash(document.querySelector('.hero .d'),20);splash(document.querySelector('.pill'),8)});
-  tl.to('.pill,.hero h1,.hero .d',{filter:CLEAN,duration:.7,stagger:.12,ease:'power2.out'});
- }
- tl.to(bee,{x:function(){return W()*.1},y:function(){return H()*.22},duration:1,ease:'sine.inOut'},isMobile?'>':'<');
- return tl}
+function clean(mob){
+  var tl=gsap.timeline({scrollTrigger:{trigger:'#scene',start:'top top',end:'bottom bottom',scrub:.8,invalidateOnRefresh:true}});
+  var rows=[.1,.34,.58,.82];
+  function rect(){return panel.getBoundingClientRect()}
+  rows.forEach(function(r,i){
+    var left=i%2===0;
+    tl.to(bee,{x:function(){var q=rect();return left?q.left+q.width-bw()*.9:q.left-bw()*.1},
+                y:function(){var q=rect();return q.top+q.height*r-20},duration:1,ease:'sine.inOut'});
+    tl.to('.bf',{clipPath:'inset('+[20,46,72,100][i]+'% 0% 0% 0%)',duration:1,ease:'none'},'<');
+  });
+  tl.to('.lb',{opacity:0,duration:.3},'-=.6');
+  tl.to('.ok',{opacity:1,y:4,duration:.4},'-=.3');
+  tl.to(panel,{filter:'brightness(1.12) saturate(1.1)',duration:.4},'<');
+  if(!mob){
+    gsap.set('.pill,.hero h1,.hero .d',{filter:DIRTY});
+    tl.add(function(){splash(document.querySelector('.hero h1'),34);splash(document.querySelector('.hero .d'),20);splash(document.querySelector('.pill'),8)});
+    tl.to('.pill,.hero h1,.hero .d',{filter:CLEAN,duration:.7,stagger:.12,ease:'power2.out'});
+  }
+  /* After sweep: park bee at bottom-right corner on mobile */
+  tl.to(bee,{
+    x:function(){return mob?W()-bw()-16:W()*.1},
+    y:function(){return mob?H()*.78:H()*.22},
+    duration:1,ease:'sine.inOut'},mob?'>':'<');
+  return tl;
+}
 mm.add('(min-width:861px)',function(){clean(false)});
 mm.add('(max-width:860px)',function(){clean(true)});
 
-/* After the hero: fly through every section */
-var wp=[[.8,.3],[.12,.55],[.82,.3],[.1,.6],[.85,.35],[.18,.55],[.78,.3]];
+/* ── After-hero flight path ──────────────────────────────── */
+/* Mobile: hug the right edge so bee never covers content    */
+var wpDesk=[[.8,.3],[.12,.55],[.82,.3],[.1,.6],[.85,.35],[.18,.55],[.78,.3]];
+var wpMob =[[.88,.22],[.88,.45],[.88,.32],[.88,.58],[.88,.38],[.88,.65],[.88,.28]];
 var after=gsap.timeline({scrollTrigger:{trigger:'.mq',start:'top bottom',endTrigger:'footer',end:'bottom bottom',scrub:1.2,invalidateOnRefresh:true}});
-wp.forEach(function(p){after.to(bee,{x:function(){return p[0]*(W()-bw())},y:function(){return p[1]*H()},duration:1,ease:'sine.inOut'})});
-/* at the end the bee dives down and out of the page */
+[0,1,2,3,4,5,6].forEach(function(i){
+  after.to(bee,{
+    x:function(){var wp=isMob()?wpMob:wpDesk;return wp[i][0]*(W()-bw())},
+    y:function(){var wp=isMob()?wpMob:wpDesk;return wp[i][1]*H()},
+    duration:1,ease:'sine.inOut'});
+});
 after.to(bee,{x:function(){return W()*.5-bw()/2},y:function(){return H()+160},duration:1.3,ease:'power2.in'});
 
-/* reveals */
+/* ── Reveals ──────────────────────────────────────────────── */
 gsap.from('.hero h1,.hero .d,.hero .row,.pill',{y:40,opacity:0,stagger:.12,duration:.9,ease:'power3.out',delay:.2});
 gsap.set('.c',{opacity:0,y:50});
 ScrollTrigger.batch('.c',{start:'top 90%',once:true,onEnter:function(b){gsap.to(b,{opacity:1,y:0,duration:.8,stagger:.1,ease:'power3.out',overwrite:true})}});
-gsap.utils.toArray('section h2').forEach(function(h){gsap.from(h,{y:40,opacity:0,filter:'blur(8px) brightness(.5)',clearProps:'filter',duration:.9,ease:'power3.out',onStart:function(){splash(h,14)},scrollTrigger:{trigger:h,start:'top 88%'}})});
-
-/* Bee guide: speaks about the section you are in */
-var say=document.getElementById('say'),shown=false,cur=-1,hold;
-var map=[['.hero',"Buzz buzz! I'm B, your cleaning guide. Watch me sweep this carpet spotless, then follow me for prices."],
-['#services',"Sofas are our speciality! From £75 for fabric, suede and leather. Then carpets: 3 for £90."],
-['#work',"Real jobs, real results! Stairs, carpets and sofas, all cleaned by B's."],
-['#hire',"Machine hire is local only, within about 10 miles of Telford. From £30 a day with the tool, 5L of solution and free delivery. The 2-day £40 deal is best value!"],
-['#watch',"Press play and see a real B's clean in action!"],
-['#why',"Supermarkets cost £58.97 plus forms and a deposit. With us it's from £30, delivered to your door. You save up to £28.97!"],
-['#book',"Ready? Call or WhatsApp 07460 782024 and I'll get you booked in."]];
-function pick(){var m=H()/2,best=0,d=1e9;map.forEach(function(s,i){var r=document.querySelector(s[0]).getBoundingClientRect();var dd=(r.top<=m&&r.bottom>=m)?0:Math.min(Math.abs(r.top-m),Math.abs(r.bottom-m));if(dd<d){d=dd;best=i}});return best}
-function place(){var x=gsap.getProperty(bee,'x'),y=gsap.getProperty(bee,'y');say.classList.toggle('r',x>W()/2);say.classList.toggle('dn',y<190)}
-function show(){cur=pick();say.textContent=map[cur][1];place();if(!shown){shown=true;gsap.fromTo(say,{y:8,scale:.9},{autoAlpha:1,y:0,scale:1,duration:.3,ease:'back.out(1.7)'})}}
-function hide(){shown=false;gsap.to(say,{autoAlpha:0,y:8,scale:.9,duration:.2})}
-var busy=false,typeTw;bee.title='Click me for a tour';
-bee.addEventListener('click',function(){
- clearTimeout(hold);
- if(shown){if(typeTw)typeTw.kill();hide();return}
- if(busy)return;busy=true;
- gsap.killTweensOf(say);gsap.set(say,{autoAlpha:0});
- cur=pick();var txt=map[cur][1];say.style.minHeight='';say.textContent=txt;say.style.minHeight=say.offsetHeight+'px';say.textContent='';
- /* bee spins and blows cleaning bubbles */
- gsap.timeline().to(bi,{rotation:360,svgOrigin:'55 45',duration:.8,ease:'power2.inOut'}).set(bi,{rotation:0});
- for(var k=0;k<14;k++){(function(k){
-  var b=document.createElement('i');b.className='bub';var s=8+Math.random()*18;b.style.width=b.style.height=s+'px';bee.appendChild(b);
-  var sx=30+Math.random()*40,sy=20+Math.random()*30;
-  gsap.fromTo(b,{x:sx,y:sy,scale:0,opacity:1},{x:sx+(Math.random()*140-70),y:sy-(60+Math.random()*90),scale:1,duration:.7+Math.random()*.4,delay:k*.04,ease:'sine.out',
-   onComplete:function(){gsap.to(b,{scale:1.7,opacity:0,duration:.15,onComplete:function(){b.remove()}})}});
- })(k)}
- /* then the text appears, typed out */
- gsap.delayedCall(.85,function(){place();shown=true;busy=false;
-  gsap.fromTo(say,{y:8,scale:.9},{autoAlpha:1,y:0,scale:1,duration:.3,ease:'back.out(1.7)'});
-  var o={n:0};typeTw=gsap.to(o,{n:txt.length,duration:txt.length*.022,ease:'none',onUpdate:function(){say.textContent=txt.slice(0,Math.round(o.n))},onComplete:function(){hold=setTimeout(hide,6000)}});
- });
+gsap.utils.toArray('section h2').forEach(function(h){
+  gsap.from(h,{y:40,opacity:0,filter:'blur(8px) brightness(.5)',clearProps:'filter',duration:.9,ease:'power3.out',
+    onStart:function(){splash(h,14)},scrollTrigger:{trigger:h,start:'top 88%'}});
 });
-gsap.ticker.add(function(){if(shown){place();var i=pick();if(i!==cur){cur=i;say.textContent=map[i][1]}}});
-gsap.delayedCall(2.4,function(){if(shown||busy)return;say.style.minHeight='';say.textContent="Click me and I'll guide you! 🐝";place();gsap.fromTo(say,{y:8,scale:.9},{autoAlpha:1,y:0,scale:1,duration:.3,ease:'back.out(1.7)'});hold=setTimeout(function(){if(!shown&&!busy)hide()},3500)});
 
-/* spotlight on cards + magnetic buttons */
+/* ── Bee guide ────────────────────────────────────────────── */
+var say=document.getElementById('say'),shown=false,cur=-1,hold;
+var map=[
+  ['.hero',   "Buzz buzz! I'm B, your cleaning guide. Watch me sweep this carpet spotless, then follow me for prices."],
+  ['#services',"Sofas are our speciality! From \u00a375 for fabric, suede and leather. Then carpets: 3 for \u00a390."],
+  ['#work',   "Real jobs, real results! Stairs, carpets and sofas, all cleaned by B's."],
+  ['#hire',   "Machine hire is local only, within about 10 miles of Telford. From \u00a330 a day with the tool, 5L of solution and free delivery. The 2-day \u00a340 deal is best value!"],
+  ['#watch',  "Press play and see a real B's clean in action!"],
+  ['#why',    "Supermarkets cost \u00a358.97 plus forms and a deposit. With us it's from \u00a330, delivered to your door. You save up to \u00a328.97!"],
+  ['#book',   "Ready? Call or WhatsApp 07460 782024 and I'll get you booked in."]
+];
+function pick(){
+  var m=H()/2,best=0,d=1e9;
+  map.forEach(function(s,i){
+    var el=document.querySelector(s[0]);if(!el)return;
+    var r=el.getBoundingClientRect();
+    var dd=(r.top<=m&&r.bottom>=m)?0:Math.min(Math.abs(r.top-m),Math.abs(r.bottom-m));
+    if(dd<d){d=dd;best=i}
+  });
+  return best;
+}
+function place(){
+  var x=gsap.getProperty(bee,'x'),y=gsap.getProperty(bee,'y');
+  say.classList.toggle('r',x>W()*.6);
+  say.classList.toggle('dn',y<200);
+}
+function hide(){shown=false;gsap.to(say,{autoAlpha:0,y:8,scale:.9,duration:.2})}
+
+var busy=false,typeTw;
+bee.title='Click me for a tour';
+bee.setAttribute('role','button');
+bee.setAttribute('aria-label','Tour guide bee — tap for a guide');
+
+bee.addEventListener('click',function(){
+  clearTimeout(hold);
+  if(shown){if(typeTw)typeTw.kill();hide();return}
+  if(busy)return;busy=true;
+  gsap.killTweensOf(say);gsap.set(say,{autoAlpha:0});
+  cur=pick();var txt=map[cur][1];
+  say.style.minHeight='';say.textContent=txt;
+  say.style.minHeight=say.offsetHeight+'px';say.textContent='';
+  gsap.timeline().to(bi,{rotation:360,svgOrigin:'55 45',duration:.8,ease:'power2.inOut'}).set(bi,{rotation:0});
+  /* Fewer bubbles on mobile for perf */
+  var nbub=isMob()?7:14;
+  for(var k=0;k<nbub;k++){(function(k){
+    var b=document.createElement('i');b.className='bub';var s=8+Math.random()*18;
+    b.style.width=b.style.height=s+'px';bee.appendChild(b);
+    var sx=30+Math.random()*40,sy=20+Math.random()*30;
+    gsap.fromTo(b,{x:sx,y:sy,scale:0,opacity:1},{x:sx+(Math.random()*140-70),y:sy-(60+Math.random()*90),scale:1,
+      duration:.7+Math.random()*.4,delay:k*.04,ease:'sine.out',
+      onComplete:function(){gsap.to(b,{scale:1.7,opacity:0,duration:.15,onComplete:function(){b.remove()}})}});
+  })(k)}
+  gsap.delayedCall(.85,function(){
+    place();shown=true;busy=false;
+    gsap.fromTo(say,{y:8,scale:.9},{autoAlpha:1,y:0,scale:1,duration:.3,ease:'back.out(1.7)'});
+    var o={n:0};typeTw=gsap.to(o,{n:txt.length,duration:txt.length*.022,ease:'none',
+      onUpdate:function(){say.textContent=txt.slice(0,Math.round(o.n))},
+      onComplete:function(){hold=setTimeout(hide,6000)}});
+  });
+});
+
+/* Tactile bounce on touch */
+bee.addEventListener('touchstart',function(){gsap.to(bee,{scale:1.18,duration:.1,ease:'power2.out'})},{passive:true});
+bee.addEventListener('touchend',function(){gsap.to(bee,{scale:1,duration:.25,ease:'elastic.out(1,.5)'})},{passive:true});
+
+/* Live bubble update */
+gsap.ticker.add(function(){if(shown){place();var i=pick();if(i!==cur){cur=i;say.textContent=map[i][1]}}});
+
+/* Intro hint */
+gsap.delayedCall(2.4,function(){
+  if(shown||busy)return;
+  say.style.minHeight='';say.textContent="Tap me for a guide! \uD83D\uDC1D";
+  place();gsap.fromTo(say,{y:8,scale:.9},{autoAlpha:1,y:0,scale:1,duration:.3,ease:'back.out(1.7)'});
+  hold=setTimeout(function(){if(!shown&&!busy)hide()},3500);
+});
+
+/* ── Card spotlight + magnetic buttons (hover devices only) ── */
 if(matchMedia('(hover:hover)').matches){
- document.querySelectorAll('.c').forEach(function(c){c.addEventListener('mousemove',function(e){var r=c.getBoundingClientRect();c.style.setProperty('--mx',(e.clientX-r.left)+'px');c.style.setProperty('--my',(e.clientY-r.top)+'px')})});
- document.querySelectorAll('.btn').forEach(function(b){
-  b.addEventListener('mousemove',function(e){var r=b.getBoundingClientRect();gsap.to(b,{x:(e.clientX-r.left-r.width/2)*.2,y:(e.clientY-r.top-r.height/2)*.3,duration:.3})});
-  b.addEventListener('mouseleave',function(){gsap.to(b,{x:0,y:0,duration:.5,ease:'elastic.out(1,.5)'})})})}
+  document.querySelectorAll('.c').forEach(function(c){
+    c.addEventListener('mousemove',function(e){
+      var r=c.getBoundingClientRect();
+      c.style.setProperty('--mx',(e.clientX-r.left)+'px');
+      c.style.setProperty('--my',(e.clientY-r.top)+'px');
+    });
+  });
+  document.querySelectorAll('.btn').forEach(function(b){
+    b.addEventListener('mousemove',function(e){var r=b.getBoundingClientRect();gsap.to(b,{x:(e.clientX-r.left-r.width/2)*.2,y:(e.clientY-r.top-r.height/2)*.3,duration:.3})});
+    b.addEventListener('mouseleave',function(){gsap.to(b,{x:0,y:0,duration:.5,ease:'elastic.out(1,.5)'})});
+  });
+}
 })();
 </script>
+
 </body></html>
