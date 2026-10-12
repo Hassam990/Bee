@@ -235,8 +235,11 @@ footer { padding:32px 0 52px; text-align:center; color:rgba(140,132,120,.55); fo
   .s2,.s3,.s4 { grid-column:auto; }
   .c { padding:20px 22px; border-radius:18px; }
   .c h3 { font-size:1.15rem; } .c .pr { font-size:1.85rem; }
-  .watch { grid-template-columns:1fr; gap:28px; }
-  .vwrap { max-width:380px; margin:0 auto; min-height:200px; }
+  .watch { grid-template-columns:1fr; gap:24px; }
+  /* Override Vimeo's padding-trick embed for portrait video */
+  .vwrap { width:100%; max-width:100%; margin:0 auto; }
+  .vwrap > div[style] { padding-top:0 !important; height:min(60svh,480px) !important; min-height:280px; }
+  .vwrap > div[style] > iframe { position:relative !important; width:100% !important; height:100% !important; top:auto !important; left:auto !important; }
   .rev { grid-template-columns:1fr; gap:10px; }
   .rev q { font-size:.92rem; }
   .packs { grid-template-columns:repeat(2,1fr); gap:10px; }
